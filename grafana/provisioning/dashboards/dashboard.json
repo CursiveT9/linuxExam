@@ -1,0 +1,17 @@
+{
+  "dashboard": {
+    "title": "Gateway Metrics",
+    "panels": [
+      {
+        "type": "graph",
+        "title": "Requests",
+        "targets": [
+          {
+            "expr": "http_requests_total",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      }
+    ]
+  }
+}

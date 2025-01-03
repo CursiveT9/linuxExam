@@ -1,0 +1,6 @@
+pip install grpcio-tools
+cd E:\PyCharmProjects\project\gateway\proto
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. ./service.proto
+cd E:\PyCharmProjects\project\domain-service\proto
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. ./service.proto
+cd E:\PyCharmProjects\project

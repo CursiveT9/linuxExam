@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package proto;
+
+service SupplierService {
+    rpc GetSuppliers (Empty) returns (SuppliersResponse);
+}
+
+message Supplier {
+    int32 id = 1;
+    string company_name = 2;
+    string contact_person = 3;
+    string phone = 4;
+}
+
+message SuppliersResponse {
+    repeated Supplier suppliers = 1;
+}
+
+message Empty {}

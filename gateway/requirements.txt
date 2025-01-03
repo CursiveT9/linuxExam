@@ -1,0 +1,6 @@
+flask
+grpcio
+grpcio-tools
+prometheus-client
+redis
+pika

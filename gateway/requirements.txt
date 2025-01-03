@@ -4,3 +4,5 @@ grpcio-tools
 prometheus-client
 redis
 pika
+logstash-logger
+python-logstash-async

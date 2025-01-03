@@ -11,7 +11,9 @@ services:
     depends_on:
       - redis
       - domain-service
-      - logstash
+      - elk
+    networks:
+      - my_network
 
   domain-service:
     build: ./domain-service
@@ -25,6 +27,8 @@ services:
       - DB_NAME=main_db
     depends_on:
       - db
+    networks:
+      - my_network
 
   redis:
     image: redis:latest
@@ -33,6 +37,8 @@ services:
     volumes:
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
     command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - my_network
 
   db:
     image: postgres:15
@@ -44,6 +50,8 @@ services:
       - "5432:5432"
     volumes:
       - ./domain-service/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - my_network
 
   pgadmin:
     image: dpage/pgadmin4
@@ -54,12 +62,16 @@ services:
       - "80:80"
     depends_on:
       - db
+    networks:
+      - my_network
 
   rabbitmq:
     image: rabbitmq:management
     ports:
       - "5672:5672"
       - "15672:15672"
+    networks:
+      - my_network
 
   prometheus:
     image: prom/prometheus
@@ -67,6 +79,8 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - my_network
 
   grafana:
     image: grafana/grafana
@@ -76,31 +90,23 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
+    networks:
+      - my_network
 
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.10.0
+  elk:
+    image: sebp/elk:latest
+    container_name: elk
+    environment:
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "5601:5601"  # Kibana
+      - "9200:9200"  # Elasticsearch
+      - "5044:5044"  # Logstash
     volumes:
       - ./elk/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
-    ports:
-      - "5044:5044"
-    depends_on:
-      - opensearch
+    networks:
+      - my_network
 
-  opensearch:
-    image: opensearchproject/opensearch:2.10.0
-    environment:
-      - discovery.type=single-node
-    ports:
-      - "9200:9200"
-      - "9600:9600"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9200" ]
-      interval: 10s
-      retries: 5
-
-  kibana:
-    image: opensearchproject/opensearch-dashboards:2.10.0
-    ports:
-      - "5601:5601"
-    depends_on:
-      - opensearch
+networks:
+  my_network:
+    name: my_network

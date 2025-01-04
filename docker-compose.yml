@@ -8,12 +8,13 @@ services:
       - REDIS_HOST=redis
       - DOMAIN_SERVICE_HOST=domain-service
       - DOMAIN_SERVICE_PORT=50051
+      - PYTHONUNBUFFERED=1
     depends_on:
       - redis
       - domain-service
-      - elk
+      - logstash
     networks:
-      - my_network
+      - elk
 
   domain-service:
     build: ./domain-service
@@ -28,7 +29,7 @@ services:
     depends_on:
       - db
     networks:
-      - my_network
+      - elk
 
   redis:
     image: redis:latest
@@ -38,7 +39,7 @@ services:
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
     command: redis-server /usr/local/etc/redis/redis.conf
     networks:
-      - my_network
+      - elk
 
   db:
     image: postgres:15
@@ -51,7 +52,7 @@ services:
     volumes:
       - ./domain-service/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - my_network
+      - elk
 
   pgadmin:
     image: dpage/pgadmin4
@@ -63,7 +64,7 @@ services:
     depends_on:
       - db
     networks:
-      - my_network
+      - elk
 
   rabbitmq:
     image: rabbitmq:management
@@ -71,7 +72,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     networks:
-      - my_network
+      - elk
 
   prometheus:
     image: prom/prometheus
@@ -80,7 +81,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
-      - my_network
+      - elk
 
   grafana:
     image: grafana/grafana
@@ -91,22 +92,46 @@ services:
     depends_on:
       - prometheus
     networks:
-      - my_network
+      - elk
 
-  elk:
-    image: sebp/elk:latest
-    container_name: elk
-    environment:
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "5601:5601"  # Kibana
-      - "9200:9200"  # Elasticsearch
-      - "5044:5044"  # Logstash
-    volumes:
-      - ./elk/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: elasticsearch
     networks:
-      - my_network
+      - elk
+    ports:
+      - "9200:9200"  # HTTP порт
+      - "9300:9300"  # транспортный порт
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false  # Отключение безопасности, если необходимо
+      - ELASTICSEARCH_HTTP_ENABLED=true  # Убедитесь, что HTTP доступ включён
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.9.0
+    container_name: logstash
+    networks:
+      - elk
+    ports:
+      - "5044:5044"
+    depends_on:
+      - elasticsearch
+    environment:
+      - XPACK_MONITORING_ENABLED=false
+      - XPACK_MONITORING_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    volumes:
+      - ./elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.9.0
+    container_name: kibana
+    networks:
+      - elk
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
 
 networks:
-  my_network:
-    name: my_network
+  elk:
+    driver: bridge

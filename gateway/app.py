@@ -5,22 +5,20 @@ import grpc
 import redis
 import json
 import pika
+import socket  # Добавляем импорт socket
 from prometheus_client import Counter, generate_latest
 from proto import service_pb2, service_pb2_grpc
-from logging_config import setup_logging  # Импортируем настройку логирования
+# Убрали импорт logging_config
 
 app = Flask(__name__)
 
-# Redis client for caching
+# Клиент Redis для кеширования
 redis_client = redis.Redis(host="redis", port=6379)
 
-# Prometheus metrics
-REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint'])
+# Метрики для Prometheus
+REQUEST_COUNT = Counter('http_requests_total', 'Общее количество HTTP-запросов', ['method', 'endpoint'])
 
-# Настроить логгер
-logger = setup_logging()
-
-# Setup RabbitMQ connection
+# Функция для отправки сообщений в RabbitMQ
 def send_to_rabbitmq(queue_name, message):
     connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
     channel = connection.channel()
@@ -28,51 +26,75 @@ def send_to_rabbitmq(queue_name, message):
     channel.basic_publish(exchange='', routing_key=queue_name, body=message)
     connection.close()
 
-# Route for creating a supplier (POST)
+# Функция отправки сообщений в Logstash
+def send_to_logstash(message):
+    host = 'logstash'  # Имя контейнера Logstash
+    port = 5044
+    try:
+        # Создаём TCP-сокет и подключаемся к Logstash
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((host, port))
+            s.sendall(message.encode('utf-8'))
+            print(f"Сообщение отправлено на {host}:{port}")
+    except Exception as e:
+        # Обработка ошибок
+        print(f"Ошибка при отправке сообщения в Logstash: {e}")
+
+# Маршрут для создания поставщика (POST)
 @app.route('/suppliers', methods=['POST'])
 def create_supplier():
+    REQUEST_COUNT.labels(method='POST', endpoint='/suppliers').inc()  # Добавляем инкремент для POST
+
     data = request.get_json()
     company_name = data.get('company_name')
     contact_person = data.get('contact_person')
     phone = data.get('phone')
 
-    # Логирование запроса
-    logger.info('Received request to create supplier', extra={'company_name': company_name, 'contact_person': contact_person, 'phone': phone})
+    # Логируем запрос (выводим в консоль)
+    print(f"Получен запрос на создание поставщика: {company_name}, {contact_person}, {phone}")
 
-    # Prepare message to be sent to RabbitMQ for asynchronous processing
+    # Подготавливаем сообщение для отправки в RabbitMQ для асинхронной обработки
     message = json.dumps({
         "company_name": company_name,
         "contact_person": contact_person,
         "phone": phone
     })
 
-    # Send to RabbitMQ queue for asynchronous processing
+    # Отправляем в очередь RabbitMQ для асинхронной обработки
     send_to_rabbitmq('create_supplier', message)
 
-    # Clear or update the cached suppliers to force the next GET request to fetch fresh data
-    redis_client.delete('suppliers')  # Clear the cache
+    # Отправляем в Logstash
+    logstash_message = json.dumps({
+        "event": "create_supplier",
+        "company_name": company_name,
+        "contact_person": contact_person,
+        "phone": phone
+    })
+    send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
-    # Логирование успешного завершения
-    logger.info('Supplier creation request accepted for processing', extra={'company_name': company_name})
+    # Очищаем или обновляем кеш поставщиков, чтобы следующий GET-запрос получил актуальные данные
+    redis_client.delete('suppliers')  # Очищаем кеш
 
-    logger.info("Test message before sending to Logstash222")
-    print("Test message before sending to Logstash222")
+    # Логируем успешное завершение (выводим в консоль)
+    print(f"Запрос на создание поставщика принят в обработку: {company_name}")
 
-    # Return acknowledgment to client
-    return jsonify({"message": "Supplier creation request accepted for processing"}), 202
+    # Отправляем подтверждение клиенту
+    return jsonify({"message": "Запрос на создание поставщика принят в обработку"}), 202
 
-# Route for updating a supplier (PUT)
+# Маршрут для обновления поставщика (PUT)
 @app.route('/suppliers/<int:id>', methods=['PUT'])
 def update_supplier(id):
+    REQUEST_COUNT.labels(method='PUT', endpoint='/suppliers').inc()  # Добавляем инкремент для PUT
+
     data = request.get_json()
     company_name = data.get('company_name')
     contact_person = data.get('contact_person')
     phone = data.get('phone')
 
-    # Логирование запроса
-    logger.info('Received request to update supplier', extra={'id': id, 'company_name': company_name, 'contact_person': contact_person, 'phone': phone})
+    # Логируем запрос (выводим в консоль)
+    print(f"Получен запрос на обновление поставщика {id}: {company_name}, {contact_person}, {phone}")
 
-    # Prepare message to be sent to RabbitMQ for asynchronous processing
+    # Подготавливаем сообщение для отправки в RabbitMQ для асинхронной обработки
     message = json.dumps({
         "id": id,
         "company_name": company_name,
@@ -80,48 +102,67 @@ def update_supplier(id):
         "phone": phone
     })
 
-    # Send to RabbitMQ queue for asynchronous processing
+    # Отправляем в очередь RabbitMQ для асинхронной обработки
     send_to_rabbitmq('update_supplier', message)
 
-    # Clear the cached suppliers to force the next GET request to fetch fresh data
-    redis_client.delete('suppliers')  # Clear the cache
+    # Отправляем в Logstash
+    logstash_message = json.dumps({
+        "event": "update_supplier",
+        "id": id,
+        "company_name": company_name,
+        "contact_person": contact_person,
+        "phone": phone
+    })
+    send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
-    # Логирование успешного завершения
-    logger.info(f'Supplier {id} update request accepted for processing')
+    # Очищаем кеш поставщиков, чтобы следующий GET-запрос получил актуальные данные
+    redis_client.delete('suppliers')  # Очищаем кеш
 
-    # Return acknowledgment to client
-    return jsonify({"message": f"Supplier {id} update request accepted for processing"}), 202
+    # Логируем успешное завершение (выводим в консоль)
+    print(f"Запрос на обновление поставщика {id} принят в обработку")
 
-# Route for deleting a supplier (DELETE)
+    # Отправляем подтверждение клиенту
+    return jsonify({"message": f"Запрос на обновление поставщика {id} принят в обработку"}), 202
+
+# Маршрут для удаления поставщика (DELETE)
 @app.route('/suppliers/<int:id>', methods=['DELETE'])
 def delete_supplier(id):
-    # Логирование запроса
-    logger.info('Received request to delete supplier', extra={'id': id})
+    REQUEST_COUNT.labels(method='DELETE', endpoint='/suppliers').inc()  # Добавляем инкремент для DELETE
 
-    # Prepare message to be sent to RabbitMQ for asynchronous processing
+    # Логируем запрос (выводим в консоль)
+    print(f"Получен запрос на удаление поставщика {id}")
+
+    # Подготавливаем сообщение для отправки в RabbitMQ для асинхронной обработки
     message = json.dumps({"id": id})
 
-    # Send to RabbitMQ queue for asynchronous processing
+    # Отправляем в очередь RabbitMQ для асинхронной обработки
     send_to_rabbitmq('delete_supplier', message)
 
-    # Clear the cached suppliers to force the next GET request to fetch fresh data
-    redis_client.delete('suppliers')  # Clear the cache
+    # Отправляем в Logstash
+    logstash_message = json.dumps({
+        "event": "delete_supplier",
+        "id": id
+    })
+    send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
-    # Логирование успешного завершения
-    logger.info(f'Supplier {id} delete request accepted for processing')
+    # Очищаем кеш поставщиков, чтобы следующий GET-запрос получил актуальные данные
+    redis_client.delete('suppliers')  # Очищаем кеш
 
-    # Return acknowledgment to client
-    return jsonify({"message": f"Supplier {id} delete request accepted for processing"}), 202
+    # Логируем успешное завершение (выводим в консоль)
+    print(f"Запрос на удаление поставщика {id} принят в обработку")
 
-# Route for getting supplier data (GET)
+    # Отправляем подтверждение клиенту
+    return jsonify({"message": f"Запрос на удаление поставщика {id} принят в обработку"}), 202
+
+# Маршрут для получения данных о поставщиках (GET)
 @app.route('/suppliers', methods=['GET'])
 def get_suppliers():
-    REQUEST_COUNT.labels(method='GET', endpoint='/suppliers').inc()
+    REQUEST_COUNT.labels(method='GET', endpoint='/suppliers').inc() # Добавляем инкремент для GET
     cached = redis_client.get('suppliers')
 
     if cached:
-        # Логирование получения данных из кеша
-        logger.info('Returning cached suppliers data')
+        # Логируем получение данных из кеша (выводим в консоль)
+        print('Возвращаем данные из кеша поставщиков')
         return jsonify({"data": cached.decode('utf-8')})
 
     with grpc.insecure_channel("domain-service:50051") as channel:
@@ -129,15 +170,23 @@ def get_suppliers():
         response = stub.GetSuppliers(service_pb2.Empty())
         suppliers = [{"id": s.id, "company_name": s.company_name} for s in response.suppliers]
 
-        # Set a new cache with an expiration time (e.g., 60 seconds)
+        # Устанавливаем новый кеш с временем жизни (например, 60 секунд)
         redis_client.setex('suppliers', 60, str(suppliers))
 
-        # Логирование успешного получения данных
-        logger.info('Fetched suppliers data from domain service')
+        # Логируем успешное получение данных (выводим в консоль)
+        print('Получены данные о поставщиках из сервисов домена')
+
+        # Отправляем в Logstash сообщение о том, что данные получены из сервиса
+        logstash_message = json.dumps({
+            "event": "get_suppliers",
+            "status": "fetched_from_service",
+            "data": suppliers
+        })
+        send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
         return jsonify({"data": suppliers})
 
-# Metrics route for Prometheus
+# Маршрут для метрик Prometheus
 @app.route('/metrics', methods=['GET'])
 def metrics():
     return generate_latest(), 200, {'Content-Type': 'text/plain'}

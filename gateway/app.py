@@ -18,12 +18,12 @@ redis_client = redis.Redis(host="redis", port=6379)
 # Метрики для Prometheus
 REQUEST_COUNT = Counter('http_requests_total', 'Общее количество HTTP-запросов', ['method', 'endpoint'])
 
-# Функция для отправки сообщений в RabbitMQ
-def send_to_rabbitmq(queue_name, message):
+# Функция для отправки gRPC-бинарников в RabbitMQ
+def send_grpc_to_rabbitmq(queue_name, grpc_message):
     connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
     channel = connection.channel()
     channel.queue_declare(queue=queue_name)
-    channel.basic_publish(exchange='', routing_key=queue_name, body=message)
+    channel.basic_publish(exchange='', routing_key=queue_name, body=grpc_message)
     connection.close()
 
 # Функция отправки сообщений в Logstash
@@ -43,25 +43,21 @@ def send_to_logstash(message):
 # Маршрут для создания поставщика (POST)
 @app.route('/suppliers', methods=['POST'])
 def create_supplier():
-    REQUEST_COUNT.labels(method='POST', endpoint='/suppliers').inc()  # Добавляем инкремент для POST
+    REQUEST_COUNT.labels(method='POST', endpoint='/suppliers').inc()
+
+    data = request.get_json()
+    grpc_message = service_pb2.CreateSupplierRequest(
+        company_name=data.get('company_name'),
+        contact_person=data.get('contact_person'),
+        phone=data.get('phone')
+    ).SerializeToString()
+
+    send_grpc_to_rabbitmq('create_supplier', grpc_message)
 
     data = request.get_json()
     company_name = data.get('company_name')
     contact_person = data.get('contact_person')
     phone = data.get('phone')
-
-    # Логируем запрос (выводим в консоль)
-    print(f"Получен запрос на создание поставщика: {company_name}, {contact_person}, {phone}")
-
-    # Подготавливаем сообщение для отправки в RabbitMQ для асинхронной обработки
-    message = json.dumps({
-        "company_name": company_name,
-        "contact_person": contact_person,
-        "phone": phone
-    })
-
-    # Отправляем в очередь RabbitMQ для асинхронной обработки
-    send_to_rabbitmq('create_supplier', message)
 
     # Отправляем в Logstash
     logstash_message = json.dumps({
@@ -72,38 +68,28 @@ def create_supplier():
     })
     send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
-    # Очищаем или обновляем кеш поставщиков, чтобы следующий GET-запрос получил актуальные данные
     redis_client.delete('suppliers')  # Очищаем кеш
-
-    # Логируем успешное завершение (выводим в консоль)
-    print(f"Запрос на создание поставщика принят в обработку: {company_name}")
-
-    # Отправляем подтверждение клиенту
     return jsonify({"message": "Запрос на создание поставщика принят в обработку"}), 202
 
 # Маршрут для обновления поставщика (PUT)
 @app.route('/suppliers/<int:id>', methods=['PUT'])
 def update_supplier(id):
-    REQUEST_COUNT.labels(method='PUT', endpoint='/suppliers').inc()  # Добавляем инкремент для PUT
+    REQUEST_COUNT.labels(method='PUT', endpoint='/suppliers').inc()
+
+    data = request.get_json()
+    grpc_message = service_pb2.UpdateSupplierRequest(
+        id=id,
+        company_name=data.get('company_name'),
+        contact_person=data.get('contact_person'),
+        phone=data.get('phone')
+    ).SerializeToString()
+
+    send_grpc_to_rabbitmq('update_supplier', grpc_message)
 
     data = request.get_json()
     company_name = data.get('company_name')
     contact_person = data.get('contact_person')
     phone = data.get('phone')
-
-    # Логируем запрос (выводим в консоль)
-    print(f"Получен запрос на обновление поставщика {id}: {company_name}, {contact_person}, {phone}")
-
-    # Подготавливаем сообщение для отправки в RabbitMQ для асинхронной обработки
-    message = json.dumps({
-        "id": id,
-        "company_name": company_name,
-        "contact_person": contact_person,
-        "phone": phone
-    })
-
-    # Отправляем в очередь RabbitMQ для асинхронной обработки
-    send_to_rabbitmq('update_supplier', message)
 
     # Отправляем в Logstash
     logstash_message = json.dumps({
@@ -115,28 +101,16 @@ def update_supplier(id):
     })
     send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
-    # Очищаем кеш поставщиков, чтобы следующий GET-запрос получил актуальные данные
     redis_client.delete('suppliers')  # Очищаем кеш
-
-    # Логируем успешное завершение (выводим в консоль)
-    print(f"Запрос на обновление поставщика {id} принят в обработку")
-
-    # Отправляем подтверждение клиенту
     return jsonify({"message": f"Запрос на обновление поставщика {id} принят в обработку"}), 202
 
 # Маршрут для удаления поставщика (DELETE)
 @app.route('/suppliers/<int:id>', methods=['DELETE'])
 def delete_supplier(id):
-    REQUEST_COUNT.labels(method='DELETE', endpoint='/suppliers').inc()  # Добавляем инкремент для DELETE
+    REQUEST_COUNT.labels(method='DELETE', endpoint='/suppliers').inc()
 
-    # Логируем запрос (выводим в консоль)
-    print(f"Получен запрос на удаление поставщика {id}")
-
-    # Подготавливаем сообщение для отправки в RabbitMQ для асинхронной обработки
-    message = json.dumps({"id": id})
-
-    # Отправляем в очередь RabbitMQ для асинхронной обработки
-    send_to_rabbitmq('delete_supplier', message)
+    grpc_message = service_pb2.DeleteSupplierRequest(id=id).SerializeToString()
+    send_grpc_to_rabbitmq('delete_supplier', grpc_message)
 
     # Отправляем в Logstash
     logstash_message = json.dumps({
@@ -145,13 +119,7 @@ def delete_supplier(id):
     })
     send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
-    # Очищаем кеш поставщиков, чтобы следующий GET-запрос получил актуальные данные
     redis_client.delete('suppliers')  # Очищаем кеш
-
-    # Логируем успешное завершение (выводим в консоль)
-    print(f"Запрос на удаление поставщика {id} принят в обработку")
-
-    # Отправляем подтверждение клиенту
     return jsonify({"message": f"Запрос на удаление поставщика {id} принят в обработку"}), 202
 
 # Маршрут для получения данных о поставщиках (GET)

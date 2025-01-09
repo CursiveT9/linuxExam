@@ -3,7 +3,10 @@ syntax = "proto3";
 package proto;
 
 service SupplierService {
+    rpc CreateSupplier (CreateSupplierRequest) returns (Supplier);
     rpc GetSuppliers (Empty) returns (SuppliersResponse);
+    rpc UpdateSupplier (UpdateSupplierRequest) returns (Supplier);
+    rpc DeleteSupplier (DeleteSupplierRequest) returns (Empty);
 }
 
 message Supplier {
@@ -15,6 +18,23 @@ message Supplier {
 
 message SuppliersResponse {
     repeated Supplier suppliers = 1;
+}
+
+message CreateSupplierRequest {
+    string company_name = 1;
+    string contact_person = 2;
+    string phone = 3;
+}
+
+message UpdateSupplierRequest {
+    int32 id = 1;
+    string company_name = 2;
+    string contact_person = 3;
+    string phone = 4;
+}
+
+message DeleteSupplierRequest {
+    int32 id = 1;
 }
 
 message Empty {}

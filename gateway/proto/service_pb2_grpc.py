@@ -34,17 +34,50 @@ class SupplierServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.CreateSupplier = channel.unary_unary(
+                '/proto.SupplierService/CreateSupplier',
+                request_serializer=service__pb2.CreateSupplierRequest.SerializeToString,
+                response_deserializer=service__pb2.Supplier.FromString,
+                _registered_method=True)
         self.GetSuppliers = channel.unary_unary(
                 '/proto.SupplierService/GetSuppliers',
                 request_serializer=service__pb2.Empty.SerializeToString,
                 response_deserializer=service__pb2.SuppliersResponse.FromString,
+                _registered_method=True)
+        self.UpdateSupplier = channel.unary_unary(
+                '/proto.SupplierService/UpdateSupplier',
+                request_serializer=service__pb2.UpdateSupplierRequest.SerializeToString,
+                response_deserializer=service__pb2.Supplier.FromString,
+                _registered_method=True)
+        self.DeleteSupplier = channel.unary_unary(
+                '/proto.SupplierService/DeleteSupplier',
+                request_serializer=service__pb2.DeleteSupplierRequest.SerializeToString,
+                response_deserializer=service__pb2.Empty.FromString,
                 _registered_method=True)
 
 
 class SupplierServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
+    def CreateSupplier(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetSuppliers(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateSupplier(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteSupplier(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -53,10 +86,25 @@ class SupplierServiceServicer(object):
 
 def add_SupplierServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'CreateSupplier': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateSupplier,
+                    request_deserializer=service__pb2.CreateSupplierRequest.FromString,
+                    response_serializer=service__pb2.Supplier.SerializeToString,
+            ),
             'GetSuppliers': grpc.unary_unary_rpc_method_handler(
                     servicer.GetSuppliers,
                     request_deserializer=service__pb2.Empty.FromString,
                     response_serializer=service__pb2.SuppliersResponse.SerializeToString,
+            ),
+            'UpdateSupplier': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateSupplier,
+                    request_deserializer=service__pb2.UpdateSupplierRequest.FromString,
+                    response_serializer=service__pb2.Supplier.SerializeToString,
+            ),
+            'DeleteSupplier': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteSupplier,
+                    request_deserializer=service__pb2.DeleteSupplierRequest.FromString,
+                    response_serializer=service__pb2.Empty.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -68,6 +116,33 @@ def add_SupplierServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class SupplierService(object):
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def CreateSupplier(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.SupplierService/CreateSupplier',
+            service__pb2.CreateSupplierRequest.SerializeToString,
+            service__pb2.Supplier.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def GetSuppliers(request,
@@ -86,6 +161,60 @@ class SupplierService(object):
             '/proto.SupplierService/GetSuppliers',
             service__pb2.Empty.SerializeToString,
             service__pb2.SuppliersResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateSupplier(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.SupplierService/UpdateSupplier',
+            service__pb2.UpdateSupplierRequest.SerializeToString,
+            service__pb2.Supplier.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteSupplier(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.SupplierService/DeleteSupplier',
+            service__pb2.DeleteSupplierRequest.SerializeToString,
+            service__pb2.Empty.FromString,
             options,
             channel_credentials,
             insecure,

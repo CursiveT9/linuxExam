@@ -33,12 +33,12 @@ class SupplierService(service_pb2_grpc.SupplierServiceServicer):
                      in rows]
         return service_pb2.SuppliersResponse(suppliers=suppliers)
 
-    # CREATE supplier (asynchronous via RabbitMQ)
+    # CREATE supplier (asynchronous via RabbitMQ with gRPC binary)
     def create_supplier_from_message(self, message):
-        data = json.loads(message)
-        company_name = data['company_name']
-        contact_person = data['contact_person']
-        phone = data['phone']
+        grpc_request = service_pb2.CreateSupplierRequest.FromString(message)
+        company_name = grpc_request.company_name
+        contact_person = grpc_request.contact_person
+        phone = grpc_request.phone
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -48,16 +48,15 @@ class SupplierService(service_pb2_grpc.SupplierServiceServicer):
         conn.commit()
         cur.close()
         conn.close()
-
         print(f"Supplier created: {supplier_id}")
 
-    # UPDATE supplier (asynchronous via RabbitMQ)
+    # UPDATE supplier (asynchronous via RabbitMQ with gRPC binary)
     def update_supplier_from_message(self, message):
-        data = json.loads(message)
-        supplier_id = data['id']
-        company_name = data['company_name']
-        contact_person = data['contact_person']
-        phone = data['phone']
+        grpc_request = service_pb2.UpdateSupplierRequest.FromString(message)
+        supplier_id = grpc_request.id
+        company_name = grpc_request.company_name
+        contact_person = grpc_request.contact_person
+        phone = grpc_request.phone
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -66,13 +65,12 @@ class SupplierService(service_pb2_grpc.SupplierServiceServicer):
         conn.commit()
         cur.close()
         conn.close()
-
         print(f"Supplier updated: {supplier_id}")
 
-    # DELETE supplier (asynchronous via RabbitMQ)
+    # DELETE supplier (asynchronous via RabbitMQ with gRPC binary)
     def delete_supplier_from_message(self, message):
-        data = json.loads(message)
-        supplier_id = data['id']
+        grpc_request = service_pb2.DeleteSupplierRequest.FromString(message)
+        supplier_id = grpc_request.id
 
         conn = get_db_connection()
         cur = conn.cursor()
@@ -80,7 +78,6 @@ class SupplierService(service_pb2_grpc.SupplierServiceServicer):
         conn.commit()
         cur.close()
         conn.close()
-
         print(f"Supplier deleted: {supplier_id}")
 
 
@@ -95,21 +92,20 @@ def rabbitmq_consumer():
     channel.queue_declare(queue='delete_supplier')
 
     def callback_create_supplier(ch, method, properties, body):
-        print("Received Create Supplier message")
+        print("Received Create Supplier gRPC message")
         SupplierService().create_supplier_from_message(body)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     def callback_update_supplier(ch, method, properties, body):
-        print("Received Update Supplier message")
+        print("Received Update Supplier gRPC message")
         SupplierService().update_supplier_from_message(body)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     def callback_delete_supplier(ch, method, properties, body):
-        print("Received Delete Supplier message")
+        print("Received Delete Supplier gRPC message")
         SupplierService().delete_supplier_from_message(body)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    # Consume messages
     channel.basic_consume(queue='create_supplier', on_message_callback=callback_create_supplier)
     channel.basic_consume(queue='update_supplier', on_message_callback=callback_update_supplier)
     channel.basic_consume(queue='delete_supplier', on_message_callback=callback_delete_supplier)

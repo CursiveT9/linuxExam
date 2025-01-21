@@ -125,7 +125,7 @@ def delete_supplier(id):
 # Маршрут для получения данных о поставщиках (GET)
 @app.route('/suppliers', methods=['GET'])
 def get_suppliers():
-    REQUEST_COUNT.labels(method='GET', endpoint='/suppliers').inc() # Добавляем инкремент для GET
+    REQUEST_COUNT.labels(method='GET', endpoint='/suppliers').inc()  # Добавляем инкремент для GET
     cached = redis_client.get('suppliers')
 
     if cached:
@@ -133,26 +133,30 @@ def get_suppliers():
         print('Возвращаем данные из кеша поставщиков')
         return jsonify({"data": cached.decode('utf-8')})
 
-    with grpc.insecure_channel("domain-service:50051") as channel:
-        stub = service_pb2_grpc.SupplierServiceStub(channel)
-        response = stub.GetSuppliers(service_pb2.Empty())
-        suppliers = [{"id": s.id, "company_name": s.company_name} for s in response.suppliers]
+    try:
+        with grpc.insecure_channel("domain-service:50051") as channel:
+            stub = service_pb2_grpc.SupplierServiceStub(channel)
+            response = stub.GetSuppliers(service_pb2.Empty())
+            suppliers = [{"id": s.id, "company_name": s.company_name} for s in response.suppliers]
 
-        # Устанавливаем новый кеш с временем жизни (например, 60 секунд)
-        redis_client.setex('suppliers', 60, str(suppliers))
+            # Устанавливаем новый кеш с временем жизни (например, 60 секунд)
+            redis_client.setex('suppliers', 60, str(suppliers))
 
-        # Логируем успешное получение данных (выводим в консоль)
-        print('Получены данные о поставщиках из сервисов домена')
+            # Логируем успешное получение данных (выводим в консоль)
+            print('Получены данные о поставщиках из сервисов домена')
 
-        # Отправляем в Logstash сообщение о том, что данные получены из сервиса
-        logstash_message = json.dumps({
-            "event": "get_suppliers",
-            "status": "fetched_from_service",
-            "data": suppliers
-        })
-        send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
+            # Отправляем в Logstash сообщение о том, что данные получены из сервиса
+            logstash_message = json.dumps({
+                "event": "get_suppliers",
+                "status": "fetched_from_service",
+                "data": suppliers
+            })
+            send_to_logstash(logstash_message)  # Отправляем сообщение в Logstash
 
-        return jsonify({"data": suppliers})
+            return jsonify({"data": suppliers})
+    except Exception as e:
+        print(f"Ошибка при получении данных о поставщиках: {e}")
+        return jsonify({"error": "Ошибка сервера, не удалось получить данные о поставщиках"}), 500
 
 # Маршрут для метрик Prometheus
 @app.route('/metrics', methods=['GET'])
